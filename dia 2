@@ -1,0 +1,163 @@
+### Taller de introducción a R - Día 2
+### Facultad de Comunicaciones y Letras UDP - enero 2020
+### Riva Quiroga (@rivaquiroga / riva.quiroga@uc.cl)
+
+# ------------------------------------------------------- #
+
+## LO PRIMERO: instalar los paquetes necesarios
+
+# install.packages("tidyverse")  # megapaquete que incluye
+# install.packages("gapminder") # paquetes de datos
+# install.packages("datos") # paquete con set de datos en español
+# install.packages("gganimate") # para animar gráficos de ggplot
+# install.packages("gifski")
+# install.packages("png")
+
+## REPLICAR EL GRÁFICO ANIMADO DE AYER
+
+# Activar a los paquetes
+library(dplyr)
+library(ggplot2)
+library(gganimate)
+library(datos)
+
+# Repliquemos el scatterplot
+
+head(paises, n = 15)
+tail(paises, n = 9)
+str(paises) # para información de las variables
+View(paises)
+
+# hagamos primero el gráfico estático
+
+ggplot(paises) + 
+  aes(pib_per_capita, esperanza_de_vida, color = continente, size = poblacion) +
+  geom_point(alpha = 0.5, show.legend = FALSE) +
+  scale_x_log10(labels = scales::dollar) +
+  facet_wrap(~continente) +
+  scale_size(range = c(2, 12)) +
+  theme_minimal() +
+  transition_time(anio) +
+  labs(title = "Año: {frame_time}")
+
+# para guardar
+anim_save("paises.gif")
+
+# Hagamos ahora un gráfico de línea
+
+paises %>% 
+  filter(pais == "Chile") %>% 
+  ggplot() + aes(anio, pib_per_capita) + geom_line() +
+  labs(title = "Evolucion del PIB en Chile (1952 - 2007)") +
+  transition_reveal(anio)
+  
+anim_save("pib_chile.gif")
+
+### ARREGLAR PROBLEMAS EN LOS DATOS
+
+# instalamos el paquete para leer archivos de excel
+install.packages("readxl")
+
+# activamos los paquetes que utilizaremos
+
+library(readxl)
+library(dplyr)
+
+datos_bb <- read_excel("datos_biobio.xls")
+
+View(datos_bb)
+
+# contar datos
+
+datos_bb %>% 
+  count(provincia)
+
+# remplazar
+
+datos_bb %>% 
+  mutate(region = replace(region, region %in% c("Biobio", "Bío bío"), "Biobío")) %>%
+  mutate(provincia = replace(provincia, provincia %in% c("Biobio", "Bío bío"), "Biobío")) %>%
+  mutate(provincia = replace(provincia, provincia %in% c("Concepcion", "concepcion", "concepción"), "Concepción")) %>% 
+  count(provincia)
+
+datos_bb_limpios <- datos_bb %>% 
+  mutate(region = replace(region, region %in% c("Biobio", "Bío bío"), "Biobío")) %>%
+  mutate(provincia = replace(provincia, provincia %in% c("Biobio", "Bío bío"), "Biobío")) %>%
+  mutate(provincia = replace(provincia, provincia %in% c("Concepcion", "concepcion", "concepción"), "Concepción")) 
+
+head(datos_bb_limpios)
+View(datos_bb_limpios)
+
+# vamos a generar nuevas categorías
+
+datos_bb_limpios <- datos_bb_limpios %>% 
+  mutate(categoria_edad = case_when(
+    edad < 18 ~ "menor de edad",
+    edad > 64 ~ "adulto mayor",
+    edad == 999 ~ "sin información",
+    TRUE ~ "adulto"
+  ))
+
+View(datos_bb_limpios)
+
+# cargar
+library(readr)
+write_csv(datos_bb_limpios, "datos_biobio_v2.csv")
+
+## mirar decriptivos
+
+# install.packages("skimr")
+library(skimr)
+library(datos)
+
+paises %>% 
+  select(poblacion, pib_per_capita) %>%
+  skim() 
+
+
+paises %>% 
+  group_by(continente) %>% 
+  select(esperanza_de_vida) %>%
+  skim() 
+
+
+### REVISAR REUNIONES LOBBY SENADO
+# Reiniciar R
+
+library(tidyverse)
+library(rvest)
+library(lubridate)
+
+reuniones_html <- read_html("https://www.senado.cl/appsenado/index.php?mo=lobby&ac=GetReuniones")
+
+reuniones <- reuniones_html %>% 
+  html_nodes("table") %>%
+  html_table(header = TRUE)
+
+View(reuniones)
+
+reuniones_senadores <- as_data_frame(reuniones[[2]])
+
+# paquete para arreglar nombres
+# install.packages("janitor")
+
+library(janitor)
+
+reuniones_senadores <- clean_names(reuniones_senadores)
+
+View(reuniones_senadores)
+
+reuniones_senadores
+# separamos las columnas
+
+reuniones_senadores <- reuniones_senadores %>% 
+  separate(fecha_duracion_lugar, c("fecha", "duracion", "lugar"), "  ", extra = "merge") %>%
+  mutate(fecha = as_date(fecha))
+
+head(reuniones_senadores)
+
+## búsqueda por palabra clave en materia
+
+reuniones_senadores %>% 
+  filter(str_detect(materia, "pensi(o|ó)n")) %>% 
+  View()
