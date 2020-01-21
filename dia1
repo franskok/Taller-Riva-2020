@@ -1,0 +1,127 @@
+### Taller introducción a R - UDP - enero 2020
+### Riva Quiroga (@rivaquiroga)
+
+# https://cran.r-project.org/
+
+
+# instalar los paquetes que vamos a utilizar
+
+# install.packages("tidyverse")
+# install.packages("readxl")
+# install.packages("gghighlight")
+# install.packages("skimr")
+
+
+# activar los paquetes
+library(tidyverse)
+library(gghighlight)
+
+# importar los datos del csv
+gapminder <- read_csv("gapminder.csv")
+
+# formas de ver el archivo
+View(gapminder) # abre una nueva ventana con toda la tabla
+head(gapminder) # imprime en la consola las 6 primeras líneas
+tail(gapminder) # últimas seis líneas
+str(gapminder) # me muestra qué tipos de datos son (numérico, caracter, factor, etc.)
+names(gapminder) # imprimir los nombres de las variables
+
+# hagamos algunas exploraciones
+
+gapminder %>% 
+  filter(country == "Chile") 
+
+gapminder %>% 
+  filter(country == "Uruguay")
+
+gapminder %>% 
+  filter(country == "Chile") %>% 
+  select(lifeExp)
+
+# crear un objeto que tenga solo los datos de Chile
+
+chile <- gapminder %>% 
+  filter(country == "Chile") 
+
+# guardemos estos datos como csv
+
+write_csv(chile, "datos_gapminder_chile.csv")
+
+# hagamos un gráfico
+
+ggplot(chile) + aes(x = year, y = gdpPercap) + geom_line()
+
+# otra forma
+
+gapminder %>% 
+  filter(country == "Chile") %>% 
+  ggplot() + aes(x = year, y = gdpPercap) + geom_line()
+
+# más países
+
+gapminder %>% 
+  filter(country %in% c("Chile", "Argentina", "Peru", "Bolivia", "Uruguay", "Colombia", "Venezuela", "Brasil", "Paraguay")) %>% 
+  ggplot() + aes(x = year, y = gdpPercap, color = country) + geom_line() + gghighlight(country == "Chile")
+
+### otras formas de filtrar
+
+gapminder %>% 
+  filter(year == 2007, gdpPercap < 1000) %>% 
+  arrange(gdpPercap) # por defecto, de menor a mayor
+
+# de mayor a menor
+
+gapminder %>% 
+  filter(year == 2007, gdpPercap < 1000) %>% 
+  arrange(desc(gdpPercap)) # de mayor a menor con desc()
+
+# summarize / summarise
+
+gapminder %>% 
+  filter(year == 2007) %>% 
+  group_by(continent) %>%  # agrupamos según variable
+  summarise(media_edad = mean(lifeExp)) # hacemos algún cálculo
+
+# scatterplot
+
+ggplot(gapminder) + aes(gdpPercap, lifeExp) + geom_point(alpha = 0.4, color = "#009688") + scale_x_log10(labels = scales::dollar) + labs(x = "PIB per cápita en dólares",
+       y = "Expectativa de vida",
+       title = "Crecimiento económico y expectativa de vida",
+       subtitle = "1952 - 2007",
+       caption = "Fuente: gapminder.org")
+
+
+# Crear nuevas variables: mutate()
+
+nuevo_chile <- chile %>% 
+  mutate(pib_pesos = gdpPercap * 771) %>% 
+  select(-continent) %>% 
+  rename(pais = country, anio = year, expectativa_vida = lifeExp, poblacion = pop, pib_dolares = gdpPercap)
+
+write_csv(nuevo_chile, "datos_chile_espaniol.csv")
+
+## un ejemplo de problema 
+library(readxl)
+
+gapminder2 <- read_excel("gapminder_version2.xlsx", skip = 2)
+head(gapminder2)
+
+# animar un gráfico
+# install.packages("gganimate")
+# install.packages("gifski")
+# install.packages("png")
+# install.packages("datos")
+# install.packages("gapminder")
+
+library(gganimate)
+library(datos)
+
+grafico <- ggplot(paises) + aes(pib_per_capita, esperanza_de_vida, color = continente, size = poblacion) + geom_point(alpha = 0.5, show.legend = FALSE) + scale_x_log10()  +
+  scale_size(range = c(2, 12)) + facet_wrap(~continente)
+
+grafico +
+  transition_time(anio) +
+  ease_aes("linear") +
+  labs(title = "Año: {frame_time}")
+
+anim_save("paises.gif")
