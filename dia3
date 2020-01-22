@@ -1,0 +1,193 @@
+# Instalar los paquetes
+#install.packages("tidyverse")
+#install.packages("janitor")
+#install.packages("glue")
+
+
+# Activar los paquetes
+library(tidyverse) 
+library(rvest) 
+library(lubridate) 
+library(glue) 
+library(janitor)
+
+# Extraer el código html
+reuniones_html <- read_html("https://senado.cl/appsenado/index.php?mo=lobby&ac=GetReuniones")
+
+# Leer la tabla
+reuniones <- reuniones_html %>%
+  html_nodes("table") %>%
+  html_table(header = TRUE)
+
+# Convertir los datos en un dataframe
+reuniones_senadores <- as_data_frame(reuniones[[2]])
+
+# Limpiar los datos
+
+reuniones_senadores <- reuniones_senadores %>% 
+  clean_names() %>% 
+  separate(fecha_duracion_lugar, c("fecha", "duracion", "lugar"), "  ", extra = "merge") %>% 
+  mutate(fecha = as_date(fecha))
+
+head(reuniones_senadores)
+
+# ¿Como guardar esto?
+
+# solución 1
+write_csv(reuniones_senadores, "reuniones_senadores.csv")
+
+# solución 2: indicar la fecha
+
+hoy <- today()
+write_delim(reuniones_senadores, glue("reuniones_senadores_{hoy}.csv"), delim = "|")
+
+# instalar paquete para guardar en excel
+install.packages("writexl")
+library(writexl)
+
+
+####### DESCARGAR ARCHIVOS SPSS o STATA
+
+library(haven)
+library(dplyr)
+library(readr)
+
+# Descar un archivo
+
+download.file("http://observatorio.ministeriodesarrollosocial.gob.cl/casen-multidimensional/casen/docs/casen_2017_spss.rar", "casen_2017.rar", mode = "wb")
+
+# importarlo
+
+casen2017 <- read_sav("Casen 2017.sav")
+
+head(casen2017)
+View(casen2017)
+
+# Si quisiera guardar todo
+# write_csv(casen2017, "casen_2017.csv")
+
+# Guardar una parte de la encuesta
+str(casen2017) # me permite ver el detalle de cada variable
+glimpse(casen2017)
+
+# Queremos crear una base con los datos de la RM para las variables sobre educación
+
+casen2017 %>% 
+  filter(region == 13) %>% 
+  select(region:zona, e1:e0) %>% 
+  write_csv("casen_rm_educacion.csv")
+
+# leer el archivo
+casen_rm_educacion <- read_csv("casen_rm_educacion.csv")
+
+#### Unir bases de datos
+
+# Primera aproximación sería descargar a mi computador
+library(readr)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+# Primera aproximación: descargar el archivo a mi computador
+download.file("https://data.ipu.org/api/comparison.csv?load-entity-refs=taxonomy_term%2Cfield_collection_item&max-depth=2&langcode=en&field=chamber%3A%3Acurrent_women_percent&structure=bicameral__lower_chamber", "camara_baja.csv", mode = "wb")
+
+# Mejor: leer directo a R
+camara_baja <- read_csv("https://data.ipu.org/api/comparison.csv?load-entity-refs=taxonomy_term%2Cfield_collection_item&max-depth=2&langcode=en&field=chamber%3A%3Acurrent_women_percent&structure=bicameral__lower_chamber", skip = 6)
+
+head(camara_baja)
+
+# seleccionar las variables que nos interesan y, al mismo tiempo, renombrarlas. Ojo con cómo quedó escrita la variable "Percentage of women"
+camara_baja <- camara_baja %>% 
+  select(pais = Country, porcentaje_baja = `Percentage of women`) 
+
+
+# Repetimos el mismo proceso con la cámara alta
+
+camara_alta <- read_csv("https://data.ipu.org/api/comparison.csv?load-entity-refs=taxonomy_term%2Cfield_collection_item&max-depth=2&langcode=en&field=chamber%3A%3Acurrent_women_percent&structure=any__upper_chamber", skip = 6)
+
+camara_alta <- camara_alta %>% 
+  select(pais = Country, porcentaje_alta = `Percentage of women`) 
+
+head(camara_alta)
+
+# revisemos cuál es el caso con datos para una sola cámara
+anti_join(camara_alta, camara_baja)
+
+bicamerales <- inner_join(camara_alta, camara_baja)
+head(bicamerales)
+
+library(stringr)
+bicamerales %>% 
+  pivot_longer(-pais, names_to= "camara", values_to = "porcentaje_mujeres") %>% 
+  mutate(camara = str_remove(camara, "porcentaje_"))
+
+# opción B (R no actualizado)
+
+head(bicamerales)
+
+bicamerales_larga <- bicamerales %>% 
+  gather(-pais, key = "camara", value = "porcentaje_mujeres") %>% 
+  mutate(camara = str_remove(camara, "porcentaje_"))
+
+head(bicamerales_larga)
+
+bicamerales_larga %>% 
+  filter(camara == "alta") %>% 
+  arrange(desc(porcentaje_mujeres))
+
+bicamerales_larga %>% 
+  filter(pais %in% c("Chile", "Argentina", "Uruguay", "Bolivia (Plurinational State of)", "Paraguay")) %>% 
+  ggplot() + aes(pais, porcentaje_mujeres, fill = camara) + geom_col(position = "dodge") + expand_limits(y = c(0, 100))
+
+### Asesorías cámara de diputados
+
+library(tidyverse)
+library(janitor)
+library(rvest)
+library(glue)
+
+# leemos el código html
+
+asesorias_html <- read_html("https://www.camara.cl/camara/transparencia_asesorias.aspx")
+
+# extraer los nombres de los diputados
+
+diputados <- asesorias_html %>% 
+  html_nodes("h3") %>% 
+  html_text() %>% 
+  str_remove("H.D. ")
+
+# extraer las tablas de cada diputado
+
+tablas <- asesorias_html %>% 
+  html_nodes("table") %>% 
+  html_table(header = TRUE, dec = ",")
+
+View(tablas)
+
+asesorias_diputados <- tibble(diputado = diputados, asesorias = tablas)
+
+head(asesorias_diputados)
+
+library(tidyr)
+asesorias_diputados <- unnest(asesorias_diputados, asesorias)
+
+head(asesorias_diputados)
+View(asesorias_diputados)
+
+library(janitor)
+library(stringr)
+
+asesorias_diputados <- asesorias_diputados %>% 
+  clean_names() %>% 
+  mutate(total_contrato = str_remove_all(total_contrato, "[:punct:]")) %>% 
+  mutate(total_contrato = as.numeric(total_contrato))
+  
+head(asesorias_diputados)
+
+# ahora podemos saber
+
+asesorias_diputados %>% 
+  group_by(asesor) %>% 
+  summarise(total_asesorias = sum(total_asesorias)) %>% 
+  arrange(desc(total_contrato))
